@@ -19,15 +19,22 @@ def counting_movie_entity(content):
 def extract_movie_title(title_list):
   soup = BeautifulSoup(title_list, 'html.parser')
 
+  next_url = soup.find('a', text='Next »')
+  if next_url:
+    next_page_url = f"https://www.imdb.com{next_url['href']}"
+  else:
+    raise Exception('Reach the last page')
+
   movie_titles = soup.find_all('div', class_='lister-item mode-advanced')
 
   movie_extract = []
 
   for movie_title in movie_titles:
     _, title, year = movie_title.find('h3', class_='lister-item-header').text.strip().split("\n")
+    print(title, end=', ')
 
-    year = year.replace(')', '').replace('(', '').split(' ')[-1]
-    year = year.split('–')[-1] if '–' in year else year
+    year = year.replace(')', '').replace('(', '').replace('I', '').strip().split(' ')[0]
+    year = year.split('–')[0] if '–' in year else year
     year = int(year)
 
     run_time_minute = int(movie_title.find('span', class_='runtime').text.replace('min', '').strip())
@@ -80,10 +87,13 @@ def extract_movie_title(title_list):
       'gross': movie_gross,
     })
 
-  return movie_extract
+  return next_page_url, movie_extract
 
 def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
   import csv
+
+  if None == movie_list or 0 == len(movie_list):
+    return
 
   movie = movie_list[-1]
   movie_keys = list(movie.keys())
@@ -111,7 +121,7 @@ def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
 def start_scrape():
   import math, time, random
 
-  url_template = url_template = "https://www.imdb.com/search/title/?release_date=2010&sort=num_votes,desc&page={page_number}"
+  url_template = url_template = "https://www.imdb.com/search/title/?release_date=2000&sort=num_votes,desc&page={page_number}"
   imdb_url = url_template.format(page_number=1)
   response = requests.get(imdb_url)
 
@@ -125,24 +135,36 @@ def start_scrape():
   movie_store = []
 
   error_pages = []
-  for i in range(1, page_range+1):
+  imdb_url = url_template.format(page_number=1)
+  i = 1
+  while imdb_url != None:
 
-    print('Executing page number', i, end=" ")
+    print('Executing page number', i)
 
     try:
-      imdb_url = url_template.format(page_number=i)
+      print("Open", imdb_url)
+
       response = requests.get(imdb_url)
       response_text = response.text
 
-      movie_store += extract_movie_title(response_text)
+      imdb_url, movie_extracted = extract_movie_title(response_text)
+      if imdb_url:
+        movie_store += movie_extracted
 
-      print('Done')
-    except:
-      print('Error')
+      print(': Done')
+    except Exception as e:
+      if str(e) == 'Reach the last page':
+        print(e)
+        break
+
+      print(e)
       error_pages.append(i)
 
     waiting = random.randint(0, 3) + random.random()
+
     print(f"Waiting for", waiting, 'sec.')
+    i += 1
+
     time.sleep(waiting)
 
   if len(error_pages):
@@ -153,4 +175,6 @@ def start_scrape():
 if '__main__' == __name__:
   movie_copus = start_scrape()
   file_name = store_data(movie_copus)
+  if None == file_name:
+    file_name = 'Nothing'
   print("Done", file_name)

@@ -2,7 +2,6 @@ import requests, logging
 from bs4 import BeautifulSoup
 from lxml import html
 
-
 def counting_movie_entity(content):
 
   soup = BeautifulSoup(content, 'html.parser')
@@ -10,7 +9,7 @@ def counting_movie_entity(content):
   content = soup.find('div', id='content-2-wide')
   description = content.find('div', class_='desc')
 
-  counting, entity = description.find('span').text.split(' of ') # [-1].replace(',', '').replace('titles.', '').strip()
+  counting, entity = description.find('span').text.split(' of ')
 
   counting = int(counting.split('-')[-1].strip().replace(',', ''))
   entity = int(entity.replace(',', '').replace('titles.', '').strip())
@@ -99,11 +98,17 @@ def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
       dialect=csv.unix_dialect
     )
 
-    writer.writeheader()
-    writer.writerows(movie_list)
-    print('Data wrote')
+    try:
+      writer.writeheader()
+      writer.writerows(movie_list)
+      print('Data wrote')
+    except:
+      print('Fail')
+      corpus_location = None
 
-if '__main__' == __name__:
+  return corpus_location
+
+def start_scrape():
   import math, time, random
 
   url_template = url_template = "https://www.imdb.com/search/title/?release_date=2010&sort=num_votes,desc&page={page_number}"
@@ -117,7 +122,7 @@ if '__main__' == __name__:
   page_range = math.ceil(title_count / title_per_page)
   print("Number of page", page_range, "All title", title_count)
 
-  moive_store = []
+  movie_store = []
 
   error_pages = []
   for i in range(1, page_range+1):
@@ -129,7 +134,7 @@ if '__main__' == __name__:
       response = requests.get(imdb_url)
       response_text = response.text
 
-      moive_store += extract_movie_title(response_text)
+      movie_store += extract_movie_title(response_text)
 
       print('Done')
     except:
@@ -138,9 +143,14 @@ if '__main__' == __name__:
 
     waiting = random.randint(0, 3) + random.random()
     print(f"Waiting for", waiting, 'sec.')
+    time.sleep(waiting)
 
   if len(error_pages):
     print('Error pages:', ', '.join(error_pages))
 
-  store_data(moive_store)
-  
+  return movie_store
+
+if '__main__' == __name__:
+  movie_copus = start_scrape()
+  file_name = store_data(movie_copus)
+  print("Done", file_name)

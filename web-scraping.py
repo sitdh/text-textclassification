@@ -69,6 +69,8 @@ def extract_movie_title(title_list):
     movie_vote_gross = movie_title.find('p', class_='sort-num_votes-visible').text.strip().split("\n")
     movie_vote = movie_vote_gross[1]
     movie_gross = movie_vote_gross[-1] if len(movie_vote_gross) > 2 else None 
+    if movie_gross:
+      movie_gross = movie_gross.lower().replace('$', '').replace('m', '')
 
     movie_vote = int(movie_vote.replace(',', ''))
 

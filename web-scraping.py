@@ -30,15 +30,26 @@ def extract_movie_title(title_list):
   movie_extract = []
 
   for movie_title in movie_titles:
-    _, title, year = movie_title.find('h3', class_='lister-item-header').text.strip().split("\n")
-    print(title, end=', ')
+    title_spliting = movie_title.find('h3', class_='lister-item-header').text.strip().split("\n")
 
+    year = title_spliting[-1]
     year = year.replace(')', '').replace('(', '').replace('I', '').strip().split(' ')[0]
     year = year.split('–')[0] if '–' in year else year
-    year = int(year)
 
-    run_time_minute = int(movie_title.find('span', class_='runtime').text.replace('min', '').strip())
-    movie_genre = movie_title.find('span', class_='genre').text.strip()
+    title = title_spliting[1].strip()
+    print(title, end=', ')
+
+    runtime_minute = None
+    try:
+      runtime_minute = int(movie_title.find('span', class_='runtime').text.replace('min', '').strip())
+    except:
+      pass 
+
+    movie_genre = None
+    try:
+      movie_genre = movie_title.find('span', class_='genre').text.strip()
+    except:
+      pass
 
     movie_rate = None
     try:
@@ -46,7 +57,11 @@ def extract_movie_title(title_list):
     except:
       pass
 
-    movie_rating = float(movie_title.find('div', class_='ratings-bar').text.strip().split("\n")[0])
+    movie_rating = None
+    try:
+      movie_rating = float(movie_title.find('div', class_='ratings-bar').text.strip().split("\n")[0])
+    except:
+      pass
 
     meta_score = 0
     try:
@@ -55,8 +70,16 @@ def extract_movie_title(title_list):
       pass
 
     movie_desc = movie_title.find_all('p', class_='text-muted')[-1].text.strip()
+    movie_desc = None if 'Add a Plot' in movie_desc else movie_desc
 
-    directors, starts = [m.strip() for m in movie_title.find('p', class_='').text.strip().split('Stars:')]
+    crews = movie_title.find('p', class_='').text.strip().replace('Star:', 'Stars:').strip()
+    stars = None
+    if 'Stars:' in crews:
+      directors, stars = [m.strip() for m in crews.split('Stars:')]
+      stars = '+'.join(s.strip() for s in stars.replace('Stars:', '').replace("\n", '').split(','))
+    else:
+      directors, stars = crews, None
+
     if 'Director:' in directors:
       directors = directors.replace('Director:', '').replace('|', '').strip()
     else:
@@ -64,27 +87,31 @@ def extract_movie_title(title_list):
 
     directors = directors.strip() if len(directors) else None
 
-    starts = '+'.join(s.strip() for s in starts.replace(" \n", '').split(','))
+    movie_vote = None
+    movie_gross = None
 
-    movie_vote_gross = movie_title.find('p', class_='sort-num_votes-visible').text.strip().split("\n")
-    movie_vote = movie_vote_gross[1]
-    movie_gross = movie_vote_gross[-1] if len(movie_vote_gross) > 2 else None 
-    if movie_gross:
-      movie_gross = movie_gross.lower().replace('$', '').replace('m', '')
+    movie_vote_gross = movie_title.find('p', class_='sort-num_votes-visible')
+    if movie_vote_gross:
+      movie_vote_gross = movie_vote_gross.text.strip().split("\n")
+      movie_gross = movie_vote_gross[-1] if len(movie_vote_gross) > 2 else None 
+      if movie_gross:
+        movie_gross = movie_gross.lower().replace('$', '').replace('m', '')
 
-    movie_vote = int(movie_vote.replace(',', ''))
+        movie_vote_gross = movie_vote_gross.text.strip().split("\n")
+        movie_vote = movie_vote_gross[1]
+        movie_vote = int(movie_vote.replace(',', ''))
 
     movie_extract.append({
       'title': title,
       'year': year,
       'movie_rate': movie_rate,
-      'runtime': run_time_minute,
+      'runtime': runtime_minute,
       'genre': movie_genre,
       'rating': movie_rating,
       'metascore': meta_score,
       'description': movie_desc,
       'directors': directors,
-      'starts': starts,
+      'starts': stars,
       'vote': movie_vote,
       'gross': movie_gross,
     })
@@ -92,30 +119,38 @@ def extract_movie_title(title_list):
   return next_page_url, movie_extract
 
 def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
-  import csv
+  import csv, os
 
   if None == movie_list or 0 == len(movie_list):
     return
 
-  movie = movie_list[-1]
-  movie_keys = list(movie.keys())
+  fields = ['title', 'year', 'movie_rate', 'runtime', 'genre', 'rating', 'metascore', 'description', 'directors', 'starts', 'vote', 'gross']
+  if not os.path.isfile(corpus_location):
+    with open(corpus_location, 'w') as f:
+      writer = csv.DictWriter(
+        f,
+        fieldnames=fields,
+        delimiter=sep,
+        dialect=csv.unix_dialect
+      )
+      writer.writeheader()
+      f.write("\n")
 
   print('Open file', corpus_location, end=' ')
 
-  with open(corpus_location, 'w') as f:
+  with open(corpus_location, 'a') as f:
     writer = csv.DictWriter(
       f,
-      fieldnames=movie_keys,
+      fieldnames=fields,
       delimiter=sep,
       dialect=csv.unix_dialect
     )
 
     try:
-      writer.writeheader()
       writer.writerows(movie_list)
       print('Data wrote')
-    except:
-      print('Fail')
+    except Exception as e:
+      print('Fail', e)
       corpus_location = None
 
   return corpus_location
@@ -123,8 +158,7 @@ def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
 def start_scrape():
   import math, time, random
 
-  url_template = url_template = "https://www.imdb.com/search/title/?release_date=2000&sort=num_votes,desc&page={page_number}"
-  imdb_url = url_template.format(page_number=1)
+  imdb_url = "https://www.imdb.com/search/title/?release_date=2000&sort=num_votes,desc&page=1"
   response = requests.get(imdb_url)
 
   response_text = response.text
@@ -135,37 +169,42 @@ def start_scrape():
   print("Number of page", page_range, "All title", title_count)
 
   movie_store = []
-
   error_pages = []
-  imdb_url = url_template.format(page_number=1)
+
   i = 1
-  while imdb_url != None:
+  imdb_url = 'https://www.imdb.com/search/title/?release_date=2000-01-01,2000-12-31&sort=num_votes,desc&after=Wy05MjIzMzcyMDM2ODU0Nzc1ODA4LCJ0dDM4NjU1MzYiLDM4MzUxXQ%3D%3D'
+  while imdb_url:
 
     print('Executing page number', i)
+    print("Open", imdb_url)
 
-    try:
-      print("Open", imdb_url)
+    # try:
+    response = requests.get(imdb_url)
+    response_text = response.text
 
-      response = requests.get(imdb_url)
-      response_text = response.text
+    imdb_url, movie_extracted = extract_movie_title(response_text)
+    if imdb_url:
+      movie_store += movie_extracted
 
-      imdb_url, movie_extracted = extract_movie_title(response_text)
-      if imdb_url:
-        movie_store += movie_extracted
+    print(': Done')
+    # except Exception as e:
+    #   if str(e) == 'Reach the last page':
+    #     print(e)
+    #     break
 
-      print(': Done')
-    except Exception as e:
-      if str(e) == 'Reach the last page':
-        print(e)
-        break
+    #   print(e)
+    #   error_pages.append(i)
 
-      print(e)
-      error_pages.append(i)
-
-    waiting = random.randint(0, 3) + random.random()
+    waiting = random.randint(0, 1) + random.random()
 
     print(f"Waiting for", waiting, 'sec.')
     i += 1
+
+    f = store_data(movie_list=movie_store)
+    if f:
+      print('Update for', f)
+
+    movie_store = []
 
     time.sleep(waiting)
 
@@ -176,7 +215,3 @@ def start_scrape():
 
 if '__main__' == __name__:
   movie_copus = start_scrape()
-  file_name = store_data(movie_copus)
-  if None == file_name:
-    file_name = 'Nothing'
-  print("Done", file_name)

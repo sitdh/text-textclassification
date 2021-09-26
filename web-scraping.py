@@ -87,20 +87,6 @@ def extract_movie_title(title_list):
 
     directors = directors.strip() if len(directors) else None
 
-    movie_vote = None
-    movie_gross = None
-
-    movie_vote_gross = movie_title.find('p', class_='sort-num_votes-visible')
-    if movie_vote_gross:
-      movie_vote_gross = movie_vote_gross.text.strip().split("\n")
-      movie_gross = movie_vote_gross[-1] if len(movie_vote_gross) > 2 else None 
-      if movie_gross:
-        movie_gross = movie_gross.lower().replace('$', '').replace('m', '')
-
-        movie_vote_gross = movie_vote_gross.text.strip().split("\n")
-        movie_vote = movie_vote_gross[1]
-        movie_vote = int(movie_vote.replace(',', ''))
-
     movie_extract.append({
       'title': title,
       'year': year,
@@ -112,8 +98,6 @@ def extract_movie_title(title_list):
       'description': movie_desc,
       'directors': directors,
       'starts': stars,
-      'vote': movie_vote,
-      'gross': movie_gross,
     })
 
   return next_page_url, movie_extract
@@ -124,7 +108,7 @@ def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
   if None == movie_list or 0 == len(movie_list):
     return
 
-  fields = ['title', 'year', 'movie_rate', 'runtime', 'genre', 'rating', 'metascore', 'description', 'directors', 'starts', 'vote', 'gross']
+  fields = ['title', 'year', 'movie_rate', 'runtime', 'genre', 'rating', 'metascore', 'description', 'directors', 'starts',]
   if not os.path.isfile(corpus_location):
     with open(corpus_location, 'w') as f:
       writer = csv.DictWriter(
@@ -134,7 +118,6 @@ def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
         dialect=csv.unix_dialect
       )
       writer.writeheader()
-      f.write("\n")
 
   print('Open file', corpus_location, end=' ')
 
@@ -158,7 +141,8 @@ def store_data(movie_list, corpus_location="movie_corpus.csv", sep="|"):
 def start_scrape():
   import math, time, random
 
-  imdb_url = "https://www.imdb.com/search/title/?release_date=2000&sort=num_votes,desc&page=1"
+  # Init url
+  imdb_url = "https://www.imdb.com/search/title/?title_type=feature&release_date=2000-01-01,2021-12-31&sort=year,asc"
   response = requests.get(imdb_url)
 
   response_text = response.text
@@ -172,7 +156,6 @@ def start_scrape():
   error_pages = []
 
   i = 1
-  imdb_url = 'https://www.imdb.com/search/title/?release_date=2000-01-01,2000-12-31&sort=num_votes,desc&after=Wy05MjIzMzcyMDM2ODU0Nzc1ODA4LCJ0dDM4NjU1MzYiLDM4MzUxXQ%3D%3D'
   while imdb_url:
 
     print('Executing page number', i)
